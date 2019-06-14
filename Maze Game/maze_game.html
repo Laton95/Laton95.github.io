@@ -1,0 +1,893 @@
+<html>
+<head>
+    <title>Maze Game</title>
+</head>
+
+<style>
+    body {
+        margin: 0;
+    }
+
+    canvas {
+        width: 100%;
+        height: 100%;
+    }
+</style>
+
+<body>
+    <div id="Output"></div>
+    <script src="js/three.js"></script>
+    <script src="js/OrbitControls.js"></script>
+    <script src="js/maze.js"></script>
+    <script src="js/dat.gui.min.js"></script>
+    <script src="js/OBJLoader.js"></script>
+    <script src="js/MTLLoader.js"></script>
+    <style>
+        body {
+            font-family: Monospace;
+            background-color: #000;
+            color: #fff;
+            margin: 0px;
+            overflow: hidden;
+        }
+    </style>
+    <script>
+        //Set up rendering
+        var renderer = new THREE.WebGLRenderer();
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMapSoft = true;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        //Scale of how big all the components of the maze are
+        var mazeScale = 0.01;
+
+        var scene = new THREE.Scene();
+
+        //Set up cameras
+        var ratio = window.innerWidth / window.innerHeight;
+        var cameraOrbit = new THREE.PerspectiveCamera(45, ratio, 0.01, 1000);
+        cameraOrbit.position.set(0, 50 * mazeScale, 0);
+        cameraOrbit.lookAt(0, 0, 1);
+
+        var cameraFirstPerson = new THREE.PerspectiveCamera(60, ratio, 0.00001, 1000);
+        //Position of the first person camera/player
+        var Pos = new THREE.Vector3(0, 0, 0);
+        cameraFirstPerson.position.set(Pos.x, Pos.y, Pos.z);
+        //Orientation of the first person camera/player
+        var Dir = new THREE.Vector3(0, 0, -1);
+        cameraFirstPerson.lookAt(Dir.x, Dir.y, Dir.z);
+
+        //Set up lighting
+        var ambientlight = new THREE.AmbientLight(new THREE.Color(1, 1, 1), 0.6);
+        scene.add(ambientlight);
+
+        var sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        sun.castShadow = true;
+        scene.add(sun);
+
+        var shadowSize = mazeScale * 100;
+        sun.shadow.camera.left = -shadowSize;
+        sun.shadow.camera.right = shadowSize;
+        sun.shadow.camera.bottom = -shadowSize;
+        sun.shadow.camera.top = shadowSize;
+        sun.shadow.mapSize.width = 4096;
+        sun.shadow.mapSize.height = 4096;
+
+        //Wall textures
+        var wood = new THREE.TextureLoader().load('img/wooden.jpg');
+        var hedge = new THREE.TextureLoader().load('img/hedge.jpg');
+        var stone1 = new THREE.TextureLoader().load('img/stone1.jpg');
+        var stone2 = new THREE.TextureLoader().load('img/stone2.png');
+
+        //Floor textures
+        var grass1 = new THREE.TextureLoader().load('img/grass1.jpg');
+        var grass2 = new THREE.TextureLoader().load('img/grass2.jpg');
+        var dirt1 = new THREE.TextureLoader().load('img/dirt1.jpg');
+
+        var fence = new THREE.TextureLoader().load('img/fence.png');
+
+        //Set up geometries and materials
+        var cubeGeometry = new THREE.BoxGeometry(mazeScale, mazeScale, mazeScale);
+        var cylinderGeometry = new THREE.CylinderGeometry(mazeScale / 2, mazeScale / 2, mazeScale, 30);
+        var coneGeometry = new THREE.ConeGeometry(mazeScale / 2, mazeScale / 2, 30);
+        var planeGeometry = new THREE.PlaneGeometry(mazeScale, mazeScale);
+
+        var wallMaterial = new THREE.MeshPhongMaterial();
+        wallMaterial.color = new THREE.Color(1, 1, 1);
+        wallMaterial.map = hedge;
+
+        var wallMaterial2 = new THREE.MeshPhongMaterial();
+        wallMaterial.color = new THREE.Color(1, 1, 1);
+        wallMaterial.map = hedge;
+
+        var floorMaterial = new THREE.MeshPhongMaterial();
+        floorMaterial.color = new THREE.Color(1, 1, 1);
+        floorMaterial.map = dirt1;
+
+        var fenceMaterial = new THREE.MeshPhongMaterial();
+        fenceMaterial.color = new THREE.Color(1, 1, 1);
+        fenceMaterial.map = fence;
+        fenceMaterial.transparent = true;
+
+        var redMaterial = new THREE.MeshPhongMaterial();
+        redMaterial.color = new THREE.Color(1, 0, 0);
+
+        var blueMaterial = new THREE.MeshPhongMaterial();
+        blueMaterial.color = new THREE.Color(0, 1, 1);
+
+        var greenMaterial = new THREE.MeshPhongMaterial();
+        greenMaterial.color = new THREE.Color(0, 1, 0);
+
+        var yellowMaterial = new THREE.MeshPhongMaterial();
+        yellowMaterial.color = new THREE.Color(1, 1, 0);
+
+        var pinkMaterial = new THREE.MeshPhongMaterial();
+        pinkMaterial.color = new THREE.Color(1, 0.5, 1);
+
+        var orangeMaterial = new THREE.MeshPhongMaterial();
+        orangeMaterial.color = new THREE.Color(1, 165 / 255, 0);
+
+        //Set up audio
+        var listener = new THREE.AudioListener();
+        cameraOrbit.add(listener);
+        var sound = new THREE.Audio(listener);
+        var audioLoader = new THREE.AudioLoader();
+        audioLoader.load('sounds/ambient.ogg', function (buffer) {
+            sound.setBuffer(buffer);
+            sound.setLoop(true);
+            sound.setVolume(0.1);
+            sound.play();
+        });
+
+        var endDecor = [];
+        var mazeDecor = [];
+
+        var mtlLoader = new THREE.MTLLoader();
+        mtlLoader.setTexturePath("models/");
+        mtlLoader.setPath("models/");
+
+        mtlLoader.load("horniman-fountain-edit.mtl", function (materials) {
+            materials.preload();
+            var objLoader = new THREE.OBJLoader();
+            objLoader.setPath("models/");
+            objLoader.setMaterials(materials);
+
+            objLoader.load("horniman-fountain-edit.obj", function (mesh) {
+                var sca = new THREE.Matrix4();
+                sca.makeScale(mazeScale * 0.07, mazeScale * 0.1, mazeScale * 0.07);
+                mesh.applyMatrix(sca);
+                var tra = new THREE.Matrix4();
+                tra.makeTranslation(0, -mazeScale/2, 0);
+                mesh.applyMatrix(tra);
+                endDecor.push(mesh);
+            });
+        });
+
+        mtlLoader.load("pot.mtl", function (materials) {
+            materials.preload();
+            var objLoader = new THREE.OBJLoader();
+            objLoader.setPath("models/");
+            objLoader.setMaterials(materials);
+
+            objLoader.load("pot.obj", function (mesh) {
+                var tra = new THREE.Matrix4();
+                tra.makeTranslation(-10, -14.6, -13.65);
+                mesh.applyMatrix(tra);
+
+                var sca = new THREE.Matrix4();
+                sca.makeScale(mazeScale * 0.3, mazeScale * 0.3, mazeScale * 0.3);
+                mesh.applyMatrix(sca);
+                endDecor.push(mesh);
+            });
+        });
+
+        mtlLoader.load("Rock1.mtl", function (materials) {
+            materials.preload();
+            var objLoader = new THREE.OBJLoader();
+            objLoader.setPath("models/");
+            objLoader.setMaterials(materials);
+
+            objLoader.load("Rock1.obj", function (mesh) {
+                var sca = new THREE.Matrix4();
+                sca.makeScale(mazeScale * 0.05, mazeScale * 0.05, mazeScale * 0.05);
+                mesh.applyMatrix(sca);
+                
+                var tra = new THREE.Matrix4();
+                tra.makeTranslation(0, -mazeScale / 2 - 0.005 * mazeScale, 0);
+                mesh.applyMatrix(tra);
+
+                mazeDecor.push(mesh);
+            });
+        });
+
+        mtlLoader.load("fern.mtl", function (materials) {
+            materials.preload();
+            var objLoader = new THREE.OBJLoader();
+            objLoader.setPath("models/");
+            objLoader.setMaterials(materials);
+
+            objLoader.load("fern.obj", function (mesh) {
+                var sca = new THREE.Matrix4();
+                sca.makeScale(mazeScale * 0.0005, mazeScale * 0.0005, mazeScale * 0.0005);
+                mesh.applyMatrix(sca);
+
+                var tra = new THREE.Matrix4();
+                tra.makeTranslation(0, -mazeScale / 2 - 0.005 * mazeScale, 0);
+                //mesh.applyMatrix(tra);
+
+                mazeDecor.push(mesh);
+            });
+        });
+
+        var playerArrowShaft;
+        var playerArrowPoint;
+
+        var collidableObjects = [];
+
+        var mazeObjects = [];
+
+        var mazeWidth = 40;
+        var mazeHeight = 30;
+        var maze;
+
+        //Adds a new maze to the scene
+        function CreateScene() {
+            maze = new Maze(mazeWidth, mazeHeight);
+            maze.createMaze();
+
+            //Place the player camera at the start of the maze
+            Pos.x = (-maze.getWidth() / 2 + 0.5) * mazeScale;
+            Pos.z = (maze.getHeight() / 2 + 3) * mazeScale;
+            Dir.x = 0;
+            Dir.z = 0;
+            cameraFirstPerson.position.set(Pos.x, Pos.y, Pos.z);
+
+            //Render a pink guide line through the maze
+            //for (var i = 0; i < maze.getPath().length; i++) {
+            //    var cube = new THREE.Mesh(cubeGeometry, pinkMaterial);
+            //    var scale = new THREE.Matrix4();
+            //    scale.makeScale(0.2, 0.2, 0.2);
+            //    cube.applyMatrix(scale);
+            //    var transform = new THREE.Matrix4();
+            //    transform.makeTranslation((maze.getPath()[i].x - maze.getWidth() / 2) * mazeScale, -(mazeScale / 2), (-maze.getPath()[i].y + maze.getHeight() / 2) * mazeScale);
+            //    cube.applyMatrix(transform);
+            //    scene.add(cube);
+            //    mazeObjects.push(cube);
+            //}
+
+            var redDoorRotation = 0;
+            var redDoorTranslation = { x: 0, y: 0 };
+            var blueDoorRotation = 0;
+            var blueDoorTranslation = { x: 0, y: 0 };
+            var greenDoorRotation = 0;
+            var greenDoorTranslation = { x: 0, y: 0 };
+            var yellowDoorRotation = 0;
+            var yellowDoorTranslation = { x: 0, y: 0 };
+
+            //Calculate orientation of all 4 doors
+            var path = maze.getPath();
+            for (var i = 0; i < path.length; i++) {
+                var x = path[i].x;
+                var y = path[i].y;
+
+                if (maze.getMaze()[x][y] > 1) {
+                    var xChange = x - path[i - 1].x;
+                    var yChange = y - path[i - 1].y;
+
+                    if (maze.getMaze()[x][y] == maze.RED_DOOR) {
+                        if (yChange != 0) {
+                            redDoorRotation = Math.PI / 2;
+                        }
+
+                        redDoorTranslation.x = xChange * mazeScale * -0.55;
+                        redDoorTranslation.y = yChange * mazeScale * 0.55;
+                    }
+                    if (maze.getMaze()[x][y] == maze.BLUE_DOOR) {
+                        if (yChange != 0) {
+                            blueDoorRotation = Math.PI / 2;
+                        }
+
+                        blueDoorTranslation.x = xChange * mazeScale * -0.55;
+                        blueDoorTranslation.y = yChange * mazeScale * 0.55;
+                    }
+                    if (maze.getMaze()[x][y] == maze.GREEN_DOOR) {
+                        if (yChange != 0) {
+                            greenDoorRotation = Math.PI / 2;
+                        }
+
+                        greenDoorTranslation.x = xChange * mazeScale * -0.55;
+                        greenDoorTranslation.y = yChange * mazeScale * 0.55;
+                    }
+                    if (maze.getMaze()[x][y] == maze.YELLOW_DOOR) {
+                        if (yChange != 0) {
+                            yellowDoorRotation = Math.PI / 2;
+                        }
+
+                        yellowDoorTranslation.x = xChange * mazeScale * -0.55;
+                        yellowDoorTranslation.y = yChange * mazeScale * 0.55;
+                    }
+                }
+            }
+
+            //Add player position arrow
+            var scale = new THREE.Matrix4();
+            scale.makeScale(0.4, 2, 0.4);
+
+            playerArrowShaft = new THREE.Mesh(cylinderGeometry, orangeMaterial);
+            playerArrowShaft.applyMatrix(scale);
+            playerArrowShaft.position.set(Pos.x, Pos.y, Pos.z);
+            scene.add(playerArrowShaft);
+            mazeObjects.push(playerArrowShaft);
+
+            scale = new THREE.Matrix4();
+            scale.makeScale(1, 2, 1);
+            var rotation = new THREE.Matrix4();
+            rotation.makeRotationX(Math.PI);
+            playerArrowPoint = new THREE.Mesh(coneGeometry, orangeMaterial);
+            playerArrowPoint.applyMatrix(rotation);
+            playerArrowPoint.applyMatrix(scale);
+            playerArrowPoint.position.set(Pos.x, Pos.y, Pos.z);
+            scene.add(playerArrowPoint);
+            mazeObjects.push(playerArrowPoint);
+
+            var BLOCKED = 0;
+            var HORIZONTAL = 1;
+            var VERTICAL = 2;
+            var END = 3;
+            var JUNCTION = 4;
+            var CORNER1 = 5;
+            var CORNER2 = 6;
+            var CORNER3 = 7;
+            var CORNER4 = 8;
+
+            function getNeighborCount(x, y) {
+                var count = maze.getMaze()[x + 1][y] + maze.getMaze()[x - 1][y] + maze.getMaze()[x][y + 1] + maze.getMaze()[x][y - 1];
+                return count;
+            }
+
+            function getNeighborType(x, y) {
+                switch (getNeighborCount(x, y)) {
+                    case 1:
+                        return END;
+                        break;
+                    case 2:
+                        if (maze.getMaze()[x + 1][y] + maze.getMaze()[x - 1][y] == 2) {
+                            return HORIZONTAL;
+                        }
+                        else if (maze.getMaze()[x][y + 1] + maze.getMaze()[x][y - 1] == 2) {
+                            return VERTICAL;
+                        }
+                        else if (maze.getMaze()[x + 1][y] + maze.getMaze()[x][y + 1] == 2) {
+                            return CORNER1;
+                        }
+                        else if (maze.getMaze()[x + 1][y] + maze.getMaze()[x][y - 1] == 2) {
+                            return CORNER2;
+                        }
+                        else if (maze.getMaze()[x - 1][y] + maze.getMaze()[x][y + 1] == 2) {
+                            return CORNER3;
+                        }
+                        else if (maze.getMaze()[x - 1][y] + maze.getMaze()[x][y - 1] == 2) {
+                            return CORNER4;
+                        }
+                        return BLOCKED;
+                    case 3:
+                        return JUNCTION;
+                        break;
+                    default:
+                        return BLOCKED;
+                }
+            }
+
+            //Put the maze in the scene
+            for (var x = 0; x < maze.getWidth(); x++) {
+                for (var y = 0; y < maze.getHeight(); y++) {
+                    if (maze.getMaze()[x][y] != maze.AIR) {
+                        var cube;
+                        var scale = new THREE.Matrix4();
+                        var rotation = new THREE.Matrix4();
+                        var translation = new THREE.Matrix4();
+                        var extraTranslation = { x: 0, y: 0 };
+                        switch (maze.getMaze()[x][y]) {
+                            case maze.WALL:
+                                if (Math.random() < 0.1 && x > 0 && x != maze.getWidth() - 1 && y > 0 && y != maze.getHeight() - 1) {
+                                    switch (getNeighborType(x, y)) {
+                                        case HORIZONTAL:
+                                            scale.makeScale(1, 1, 0.1);
+                                            cube = new THREE.Mesh(planeGeometry, fenceMaterial);
+                                            cube.material.side = THREE.DoubleSide;
+                                            break;
+                                        case VERTICAL:
+                                            rotation.makeRotationY(Math.PI / 2);
+                                            cube = new THREE.Mesh(planeGeometry, fenceMaterial);
+                                            cube.material.side = THREE.DoubleSide;
+                                            break;
+                                        case END:
+                                            if (endDecor.length > 0) {
+                                                cube = endDecor[Math.floor(Math.random() * endDecor.length)].clone();
+                                            }
+                                            else {
+                                                cube = new THREE.Mesh(cubeGeometry, wallMaterial);
+                                            }
+                                            break;
+                                        default:
+                                            cube = new THREE.Mesh(cubeGeometry, wallMaterial);
+                                    }
+                                }
+                                else {
+                                    cube = new THREE.Mesh(cubeGeometry, wallMaterial);
+                                }
+                                break;
+                            case maze.RED_DOOR:
+                                cube = new THREE.Mesh(cubeGeometry, redMaterial);
+                                scale.makeScale(0.1, 1, 1);
+                                rotation.makeRotationY(redDoorRotation);
+                                extraTranslation.x = redDoorTranslation.x;
+                                extraTranslation.y = redDoorTranslation.y;
+                                cube.name = 'redDoor';
+                                break;
+                            case maze.BLUE_DOOR:
+                                cube = new THREE.Mesh(cubeGeometry, blueMaterial);
+                                scale.makeScale(0.1, 1, 1);
+                                rotation.makeRotationY(blueDoorRotation);
+                                extraTranslation.x = blueDoorTranslation.x;
+                                extraTranslation.y = blueDoorTranslation.y;
+                                cube.name = 'blueDoor';
+                                break;
+                            case maze.GREEN_DOOR:
+                                cube = new THREE.Mesh(cubeGeometry, greenMaterial);
+                                scale.makeScale(0.1, 1, 1);
+                                rotation.makeRotationY(greenDoorRotation);
+                                extraTranslation.x = greenDoorTranslation.x;
+                                extraTranslation.y = greenDoorTranslation.y;
+                                cube.name = 'greenDoor';
+                                break;
+                            case maze.YELLOW_DOOR:
+                                cube = new THREE.Mesh(cubeGeometry, yellowMaterial);
+                                scale.makeScale(0.1, 1, 1);
+                                rotation.makeRotationY(yellowDoorRotation);
+                                extraTranslation.x = yellowDoorTranslation.x;
+                                extraTranslation.y = yellowDoorTranslation.y;
+                                cube.name = 'yellowDoor';
+                                break;
+                            case maze.RED_KEY:
+                                cube = new THREE.Mesh(cubeGeometry, redMaterial);
+                                scale.makeScale(0.2, 0.2, 0.2);
+                                cube.name = 'redKey';
+                                break;
+                            case maze.BLUE_KEY:
+                                cube = new THREE.Mesh(cubeGeometry, blueMaterial);
+                                scale.makeScale(0.2, 0.2, 0.2);
+                                cube.name = 'blueKey';
+                                break;
+                            case maze.GREEN_KEY:
+                                cube = new THREE.Mesh(cubeGeometry, greenMaterial);
+                                scale.makeScale(0.2, 0.2, 0.2);
+                                cube.name = 'greenKey';
+                                break;
+                            case maze.YELLOW_KEY:
+                                cube = new THREE.Mesh(cubeGeometry, yellowMaterial);
+                                scale.makeScale(0.2, 0.2, 0.2);
+                                cube.name = 'yellowKey';
+                                break;
+                        }
+                        cube.applyMatrix(scale);
+                        cube.applyMatrix(rotation);
+                        translation.makeTranslation(((x - maze.getWidth() / 2) * mazeScale) + extraTranslation.x, 0, ((-y + maze.getHeight() / 2) * mazeScale) + extraTranslation.y);
+                        cube.applyMatrix(translation);
+                        cube.receiveShadow = true;
+                        cube.castShadow = true;
+                        scene.add(cube);
+                        collidableObjects.push(cube);
+                        mazeObjects.push(cube);
+                    }
+                    else {
+                        if (mazeDecor.length > 0) {
+                            var decor = mazeDecor[Math.floor(Math.random() * mazeDecor.length)].clone();
+                            var scale = new THREE.Matrix4();
+                            var rotation = new THREE.Matrix4();
+                            rotation.makeRotationY(Math.PI * Math.random());
+                            var translation = new THREE.Matrix4();
+
+                            decor.applyMatrix(scale);
+                            decor.applyMatrix(rotation);
+                            translation.makeTranslation(((x - maze.getWidth() / 2) * mazeScale) + (Math.random() - 0.5) * mazeScale, 0, ((-y + maze.getHeight() / 2) * mazeScale) + (Math.random() - 0.5) * mazeScale);
+                            decor.applyMatrix(translation);
+                            decor.castShadow = true;
+                            scene.add(decor);
+                            mazeObjects.push(decor);
+                        }                        
+                    }
+                }
+            }
+
+            //Sets how many times the given texture should be tiled
+            function setTextureTileSize(texture, x, y) {
+                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(x, y);
+            }
+
+            //Set tiling based on size of the maze
+            setTextureTileSize(grass1, mazeWidth, mazeHeight);
+            setTextureTileSize(grass2, mazeWidth, mazeHeight);
+            setTextureTileSize(dirt1, mazeWidth, mazeHeight);
+
+            //Add the floor
+            var backGeometry = new THREE.PlaneGeometry(maze.getWidth() * mazeScale * 2, maze.getHeight() * mazeScale * 2);
+            var back = new THREE.Mesh(backGeometry, floorMaterial);
+            var transform = new THREE.Matrix4();
+            transform.makeTranslation(-0.5 * mazeScale, -(mazeScale / 2), +0.5 * mazeScale);
+            back.applyMatrix(transform);
+            back.rotation.x = -Math.PI / 2;
+            back.receiveShadow = true;
+            back.castShadow = false;
+            scene.add(back);
+            mazeObjects.push(back);
+        }
+
+        CreateScene();
+
+        //How close the player can get to an object
+        var PLAYERCOLLISIONDISTANCE = 0.3 * mazeScale;
+
+        //Convert given angle to radians
+        function degreesToRadians(angle) {
+            return angle * 2 * Math.PI / 180;
+        }
+
+        //Returns false if player can move, true otherwise
+        function detectPlayerCollision() {
+            var playerDirection = new THREE.Vector3();
+            cameraFirstPerson.getWorldDirection(playerDirection);
+
+            if (moveBackward) {
+                playerDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+            }
+
+            var rayCaster = new THREE.Raycaster(cameraFirstPerson.position, playerDirection);
+
+            return rayIntersect(rayCaster, PLAYERCOLLISIONDISTANCE);
+        }
+
+        function rayIntersect(ray, distance) {
+            var intersects = ray.intersectObjects(collidableObjects);
+
+            for (var i = 0; i < intersects.length; i++) {
+                if (intersects[i].distance < distance) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        controls = new THREE.OrbitControls(cameraOrbit, renderer.domElement);
+
+        var moveForward = false;
+        var moveLeft = false;
+        var moveBackward = false;
+        var moveRight = false;
+
+        var firstPerson = false;
+
+        const clock = new THREE.Clock();
+
+        var speed = 3 * mazeScale;
+        var angle = Math.PI;
+
+        var sunAngle = 115;
+
+        var collAlert = document.getElementById('Output');
+
+        //Clear the text box at the top of the screen
+        function clearTextbox() {
+            collAlert.innerHTML = "-";
+        }
+
+        //Main game loop
+        var MyUpdateLoop = function () {
+            var delta = clock.getDelta();
+            if (!detectPlayerCollision()) {
+                clearTextbox()
+                if (moveForward && firstPerson) {
+                    Pos.x += Dir.x * speed * delta;
+                    Pos.z += Dir.z * speed * delta;
+                }
+                if (moveBackward && firstPerson) {
+                    Pos.x -= Dir.x * speed * delta;
+                    Pos.z -= Dir.z * speed * delta;
+                }
+            }
+            else {
+                //Give the player an alert that they have collided with something
+                collAlert.innerHTML = "Opps! Can't go foward";
+            }
+
+            if (moveLeft && firstPerson) {
+                angle += speed * delta * 100;
+                Dir.x = Math.sin(angle);
+                Dir.z = Math.cos(angle);
+                Dir.normalize();
+            }
+            if (moveRight && firstPerson) {
+                angle -= speed * delta * 100;
+                Dir.x = Math.sin(angle);
+                Dir.z = Math.cos(angle);
+                Dir.normalize();
+            }
+
+            //Update player arrow position
+            playerArrowShaft.position.set(Pos.x, Pos.y + mazeScale * 2, Pos.z);
+            playerArrowPoint.position.set(Pos.x, Pos.y + mazeScale, Pos.z);
+
+            if (firstPerson) {
+                renderer.render(scene, cameraFirstPerson);
+                cameraFirstPerson.position.set(Pos.x, Pos.y, Pos.z);
+                cameraFirstPerson.lookAt(Pos.x + Dir.x, Pos.y + Dir.y, Pos.z + Dir.z);
+                cameraFirstPerson.updateProjectionMatrix();
+            }
+            else {
+                renderer.render(scene, cameraOrbit);
+                controls.update();
+                cameraOrbit.updateProjectionMatrix();
+            }
+
+            //Update positon of sun
+            var sunAngleRad = sunAngle * Math.PI / 180;
+            var sunDistance = 100;
+            var sunHeight = Math.sin(sunAngleRad) * sunDistance;
+            var sunOffset = Math.cos(sunAngleRad) * sunDistance;
+
+            var rotationAngle = 30 * Math.PI / 180;
+            var sunZOffset = Math.tan(rotationAngle) * sunOffset;
+
+            sun.position.y = sunHeight;
+            sun.position.x = sunOffset;
+            sun.position.z = sunZOffset;
+
+            requestAnimationFrame(MyUpdateLoop);
+        };
+
+        requestAnimationFrame(MyUpdateLoop);
+
+        //Update aspect ratio when screen changed
+        var MyResize = function () {
+            var width = window.innerWidth;
+            var height = window.innerHeight;
+            renderer.setSize(width, height);
+            if (firstPerson) {
+                cameraFirstPerson.aspect = width / height;
+                cameraFirstPerson.updateProjectionMatrix();
+                renderer.render(scene, cameraFirstPerson);
+            }
+            else {
+                cameraOrbit.aspect = width / height;
+                cameraOrbit.updateProjectionMatrix();
+                renderer.render(scene, cameraOrbit);
+            }
+        };
+
+        var raycaster = new THREE.Raycaster();
+
+        var haveRedkey = false;
+        var haveBluekey = false;
+        var haveGreenkey = false;
+        var haveYellowkey = false;
+
+        //Removes the object with the given name from the list of collidable objects
+        function removeNamedObjectFromCollisions(name) {
+            for (var i = 0; i < collidableObjects.length; i++) {
+                if (collidableObjects[i].name == name) {
+                    collidableObjects.splice(i, 1);
+                }
+            }
+        }
+
+        //Mouse click event listener
+        function onDocumentMouseDown(event) {
+            if (firstPerson) {
+                var mouse = new THREE.Vector2;
+                mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+                mouse.y = - (event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, cameraFirstPerson);
+
+                var intersects = raycaster.intersectObjects(scene.children, false);
+
+                if (intersects.length > 0) {
+                    if ((intersects[0].object.name == "redKey") && (!haveRedkey)) {
+                        console.log("Got the red key!");
+                        haveRedkey = true;
+                        scene.remove(scene.getObjectByName('redKey'));
+                        removeNamedObjectFromCollisions('redKey');
+                    }
+                    if ((intersects[0].object.name == "redDoor") && (haveRedkey)) {
+                        console.log("Open the red door!");
+                        scene.remove(scene.getObjectByName('redDoor'));
+                        removeNamedObjectFromCollisions('redDoor');
+                    }
+                    if ((intersects[0].object.name == "blueKey") && (!haveBluekey)) {
+                        console.log("Got the blue key!");
+                        scene.remove(scene.getObjectByName('blueKey'));
+                        removeNamedObjectFromCollisions('blueKey');
+                        haveBluekey = true;
+                    }
+                    if ((intersects[0].object.name == "blueDoor") && (haveBluekey)) {
+                        console.log("Open the blue door!");
+                        scene.remove(scene.getObjectByName('blueDoor'));
+                        removeNamedObjectFromCollisions('blueDoor');
+                    }
+                    if ((intersects[0].object.name == "greenKey") && (!haveGreenkey)) {
+                        console.log("Got the green key!");
+                        scene.remove(scene.getObjectByName('greenKey'));
+                        removeNamedObjectFromCollisions('greenKey');
+                        haveGreenkey = true;
+
+                    }
+                    if ((intersects[0].object.name == "greenDoor") && (haveGreenkey)) {
+                        console.log("Open the green door!");
+                        scene.remove(scene.getObjectByName('greenDoor'));
+                        removeNamedObjectFromCollisions('greenDoor');
+                    }
+                    if ((intersects[0].object.name == "yellowKey") && (!haveYellowkey)) {
+                        console.log("Got the yellow key!");
+                        scene.remove(scene.getObjectByName('yellowKey'));
+                        removeNamedObjectFromCollisions('yellowKey');
+                        haveYellowkey = true;
+
+                    }
+                    if ((intersects[0].object.name == "yellowDoor") && (haveYellowkey)) {
+                        console.log("Open the yellow door!");
+                        scene.remove(scene.getObjectByName('yellowDoor'));
+                        removeNamedObjectFromCollisions('yellowDoor');
+                    }
+                }
+            }
+        }
+
+        //Key down event listener
+        var onKeyDown = function (event) {
+            switch (event.keyCode) {
+                case 38: // up
+                case 87: // w
+                    moveForward = true;
+                    break;
+
+                case 37: // left
+                case 65: // a
+                    moveLeft = true;
+                    break;
+
+                case 40: // down
+                case 83: // s
+                    moveBackward = true;
+                    break;
+
+                case 39: // right
+                case 68: // d
+                    moveRight = true;
+                    break;
+
+                case 32:
+                    firstPerson = !firstPerson;
+                    controls.enabled = !controls.enabled;
+                    break;
+            }
+        };
+
+        //Key up event listener
+        var onKeyUp = function (event) {
+            switch (event.keyCode) {
+                case 38: // up
+                case 87: // w
+                    moveForward = false;
+                    break;
+
+                case 37: // left
+                case 65: // a
+                    moveLeft = false;
+                    break;
+
+                case 40: // down
+                case 83: // s
+                    moveBackward = false;
+                    break;
+
+                case 39: // right
+                case 68: // d
+                    moveRight = false;
+                    break;
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown, false);
+        document.addEventListener('keyup', onKeyUp, false);
+        window.addEventListener('resize', MyResize);
+        document.addEventListener('mousedown', onDocumentMouseDown, false);
+
+        //Add gui
+        var gui;
+        function buildGui() {
+            gui = new dat.GUI();
+
+            var options = {
+                sun_angle: sunAngle,
+                maze_width: mazeWidth,
+                maze_height: mazeHeight,
+
+                reset: function () {
+                    while (mazeObjects.length > 0) {
+                        scene.remove(mazeObjects[0]);
+                        mazeObjects.shift();
+                    }
+
+                    angle = Math.PI;
+
+                    collidableObjects = [];
+                    mazeObjects = [];
+
+                    CreateScene();
+                },
+
+                wallTexture: '',
+                floorTexture: '',
+            }
+
+            //Slider to control sun angle
+            gui.add(options, 'sun_angle', 0, 180).name('Sun Angle').onChange(function (val) {
+                sunAngle = val;
+            });
+
+            //Drop down menu to control wall textures
+            gui.add(options, 'wallTexture', ['stone 1', 'stone 2', 'wood', 'hedge']).name('Wall Texture').onChange(function (val) {
+                switch (val) {
+                    case 'stone 1':
+                        wallMaterial.map = stone1;
+                        break;
+                    case 'stone 2':
+                        wallMaterial.map = stone2;
+                        break;
+                    case 'wood':
+                        wallMaterial.map = wood;
+                        break;
+                    case 'hedge':
+                        wallMaterial.map = hedge;
+                        break;
+                }
+            });
+
+            //Drop down menu to control floor textures
+            gui.add(options, 'floorTexture', ['grass 1', 'grass 2', 'dirt']).name('Ground Texture').onChange(function (val) {
+                switch (val) {
+                    case 'grass 1':
+                        floorMaterial.map = grass1;
+                        break;
+                    case 'grass 2':
+                        floorMaterial.map = grass2;
+                        break;
+                    case 'dirt':
+                        floorMaterial.map = dirt1;
+                        break;
+                }
+            });
+
+            //Slider to control maze width
+            gui.add(options, 'maze_width', 20, 100).name('Maze Width').onChange(function (val) {
+                mazeWidth = Math.floor(val);
+            });
+
+            //Slider to control maze height
+            gui.add(options, 'maze_height', 20, 100).name('Maze Height').onChange(function (val) {
+                mazeHeight = Math.floor(val);
+            });
+
+            //Button to reset the maze
+            gui.add(options, 'reset').name('New Maze');
+
+            gui.open();
+        }
+
+        buildGui();
+    </script>
+</body>
+</html>
