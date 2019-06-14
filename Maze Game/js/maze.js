@@ -67,6 +67,27 @@ Maze = function (width, height) {
 
         return result;
     }
+	
+	//Get spaces adjacent to given maze space
+    function getNeighboursInverse(maze, x, y, type, range) {
+        var result = [];
+        var width = maze.length;
+        var height = maze[0].length;
+        if (y + range < height && maze[x][y + range] != type) {
+            result.push({ x: x, y: y + range });
+        }
+        if (x + range < width && maze[x + range][y] != type) {
+            result.push({ x: x + range, y: y });
+        }
+        if (y - range >= 0 && maze[x][y - range] != type) {
+            result.push({ x: x, y: y - range });
+        }
+        if (x - range >= 0 && maze[x - range][y] != type) {
+            result.push({ x: x - range, y: y });
+        }
+
+        return result;
+    }
 
     //Connect an empty space to the maze
     function connectEdge(maze, edge) {
@@ -87,19 +108,19 @@ Maze = function (width, height) {
     }
 
     //Find the solution to the maze
-    function findPath(maze, x, y, path) {
-        if (maze[x][y] != AIR) {
+    function findPath(maze, x, y, tempPath) {
+        if (maze[x][y] == WALL) {
             return false
         }
         if (x == width - 2 && y == height - 1) {
-            path.push({ x: x, y: y });
+            tempPath.push({ x: x, y: y });
             return true;
         }
         maze[x][y] = 1;
-        var cells = getNeighbours(maze, x, y, AIR, 1);
+        var cells = getNeighboursInverse(maze, x, y, WALL, 1);
         for (var i = 0; i < cells.length; i++) {
-            if (findPath(maze, cells[i].x, cells[i].y, path)) {
-                path.push({ x: x, y: y });
+            if (findPath(maze, cells[i].x, cells[i].y, tempPath)) {
+                tempPath.push({ x: x, y: y });
                 return true;
             }
         }
@@ -196,5 +217,12 @@ Maze = function (width, height) {
 
     this.getMaze = function () {
         return maze;
+    }
+	
+	this.findPath = function (x, y) {
+		var newPath = [];
+        var tempMaze = copy(maze);
+        findPath(tempMaze, x, y, newPath);
+		return newPath;
     }
 }

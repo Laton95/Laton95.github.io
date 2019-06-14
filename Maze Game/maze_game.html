@@ -86,6 +86,7 @@
         var grass2 = new THREE.TextureLoader().load('img/grass2.jpg');
         var dirt1 = new THREE.TextureLoader().load('img/dirt1.jpg');
 
+        //Fence texture
         var fence = new THREE.TextureLoader().load('img/fence.png');
 
         //Set up geometries and materials
@@ -95,10 +96,6 @@
         var planeGeometry = new THREE.PlaneGeometry(mazeScale, mazeScale);
 
         var wallMaterial = new THREE.MeshPhongMaterial();
-        wallMaterial.color = new THREE.Color(1, 1, 1);
-        wallMaterial.map = hedge;
-
-        var wallMaterial2 = new THREE.MeshPhongMaterial();
         wallMaterial.color = new THREE.Color(1, 1, 1);
         wallMaterial.map = hedge;
 
@@ -127,7 +124,7 @@
         pinkMaterial.color = new THREE.Color(1, 0.5, 1);
 
         var orangeMaterial = new THREE.MeshPhongMaterial();
-        orangeMaterial.color = new THREE.Color(1, 165 / 255, 0);
+        orangeMaterial.color = new THREE.Color(1, 145 / 255, 0);
 
         //Set up audio
         var listener = new THREE.AudioListener();
@@ -141,6 +138,7 @@
             sound.play();
         });
 
+        //Set up models
         var endDecor = [];
         var mazeDecor = [];
 
@@ -148,78 +146,54 @@
         mtlLoader.setTexturePath("models/");
         mtlLoader.setPath("models/");
 
-        mtlLoader.load("horniman-fountain-edit.mtl", function (materials) {
-            materials.preload();
-            var objLoader = new THREE.OBJLoader();
-            objLoader.setPath("models/");
-            objLoader.setMaterials(materials);
+        function addModel(modelMtl, modelObj, scaleX, scaleY, scaleZ, translateX, translateY, translateZ, group) {
+            mtlLoader.load(modelMtl, function (materials) {
+                materials.preload();
+                var objLoader = new THREE.OBJLoader();
+                objLoader.setPath("models/");
+                objLoader.setMaterials(materials);
 
-            objLoader.load("horniman-fountain-edit.obj", function (mesh) {
-                var sca = new THREE.Matrix4();
-                sca.makeScale(mazeScale * 0.07, mazeScale * 0.1, mazeScale * 0.07);
-                mesh.applyMatrix(sca);
-                var tra = new THREE.Matrix4();
-                tra.makeTranslation(0, -mazeScale/2, 0);
-                mesh.applyMatrix(tra);
-                endDecor.push(mesh);
+                objLoader.load(modelObj, function (mesh) {
+                    var sca = new THREE.Matrix4();
+                    sca.makeScale(mazeScale * scaleX, mazeScale * scaleY, mazeScale * scaleZ);
+                    mesh.applyMatrix(sca);
+
+                    var tra = new THREE.Matrix4();
+                    tra.makeTranslation(translateX, translateY, translateZ);
+                    mesh.applyMatrix(tra);
+
+                    mesh.castShadow = true;
+                    group.push(mesh);
+                });
             });
-        });
+        }
 
-        mtlLoader.load("pot.mtl", function (materials) {
-            materials.preload();
-            var objLoader = new THREE.OBJLoader();
-            objLoader.setPath("models/");
-            objLoader.setMaterials(materials);
+        function addModelReverse(modelMtl, modelObj, scaleX, scaleY, scaleZ, translateX, translateY, translateZ, group) {
+            mtlLoader.load(modelMtl, function (materials) {
+                materials.preload();
+                var objLoader = new THREE.OBJLoader();
+                objLoader.setPath("models/");
+                objLoader.setMaterials(materials);
 
-            objLoader.load("pot.obj", function (mesh) {
-                var tra = new THREE.Matrix4();
-                tra.makeTranslation(-10, -14.6, -13.65);
-                mesh.applyMatrix(tra);
+                objLoader.load(modelObj, function (mesh) {
+                    var tra = new THREE.Matrix4();
+                    tra.makeTranslation(translateX, translateY, translateZ);
+                    mesh.applyMatrix(tra);
 
-                var sca = new THREE.Matrix4();
-                sca.makeScale(mazeScale * 0.3, mazeScale * 0.3, mazeScale * 0.3);
-                mesh.applyMatrix(sca);
-                endDecor.push(mesh);
+                    var sca = new THREE.Matrix4();
+                    sca.makeScale(mazeScale * scaleX, mazeScale * scaleY, mazeScale * scaleZ);
+                    mesh.applyMatrix(sca);
+
+                    mesh.castShadow = true;
+                    group.push(mesh);
+                });
             });
-        });
+        }
 
-        mtlLoader.load("Rock1.mtl", function (materials) {
-            materials.preload();
-            var objLoader = new THREE.OBJLoader();
-            objLoader.setPath("models/");
-            objLoader.setMaterials(materials);
-
-            objLoader.load("Rock1.obj", function (mesh) {
-                var sca = new THREE.Matrix4();
-                sca.makeScale(mazeScale * 0.05, mazeScale * 0.05, mazeScale * 0.05);
-                mesh.applyMatrix(sca);
-                
-                var tra = new THREE.Matrix4();
-                tra.makeTranslation(0, -mazeScale / 2 - 0.005 * mazeScale, 0);
-                mesh.applyMatrix(tra);
-
-                mazeDecor.push(mesh);
-            });
-        });
-
-        mtlLoader.load("fern.mtl", function (materials) {
-            materials.preload();
-            var objLoader = new THREE.OBJLoader();
-            objLoader.setPath("models/");
-            objLoader.setMaterials(materials);
-
-            objLoader.load("fern.obj", function (mesh) {
-                var sca = new THREE.Matrix4();
-                sca.makeScale(mazeScale * 0.0005, mazeScale * 0.0005, mazeScale * 0.0005);
-                mesh.applyMatrix(sca);
-
-                var tra = new THREE.Matrix4();
-                tra.makeTranslation(0, -mazeScale / 2 - 0.005 * mazeScale, 0);
-                //mesh.applyMatrix(tra);
-
-                mazeDecor.push(mesh);
-            });
-        });
+        addModel("horniman-fountain-edit.mtl", "horniman-fountain-edit.obj", 0.07, 0.1, 0.07, 0, -mazeScale / 2, 0, endDecor);
+        addModelReverse("pot.mtl", "pot.obj", 0.3, 0.3, 0.3, -10, -14.6, -13.65, endDecor);
+        addModel("Rock1.mtl", "Rock1.obj", 0.05, 0.05, 0.05, 0, -mazeScale / 2 - 0.005 * mazeScale, 0, mazeDecor);
+        addModel("grass.mtl", "grass.obj", 0.05, 0.05, 0.05, 0, -mazeScale / 2 - 0.005 * mazeScale, 0, mazeDecor);
 
         var playerArrowShaft;
         var playerArrowPoint;
@@ -243,19 +217,6 @@
             Dir.x = 0;
             Dir.z = 0;
             cameraFirstPerson.position.set(Pos.x, Pos.y, Pos.z);
-
-            //Render a pink guide line through the maze
-            //for (var i = 0; i < maze.getPath().length; i++) {
-            //    var cube = new THREE.Mesh(cubeGeometry, pinkMaterial);
-            //    var scale = new THREE.Matrix4();
-            //    scale.makeScale(0.2, 0.2, 0.2);
-            //    cube.applyMatrix(scale);
-            //    var transform = new THREE.Matrix4();
-            //    transform.makeTranslation((maze.getPath()[i].x - maze.getWidth() / 2) * mazeScale, -(mazeScale / 2), (-maze.getPath()[i].y + maze.getHeight() / 2) * mazeScale);
-            //    cube.applyMatrix(transform);
-            //    scene.add(cube);
-            //    mazeObjects.push(cube);
-            //}
 
             var redDoorRotation = 0;
             var redDoorTranslation = { x: 0, y: 0 };
@@ -342,11 +303,19 @@
             var CORNER3 = 7;
             var CORNER4 = 8;
 
+            //Count number of adjacent walls
             function getNeighborCount(x, y) {
-                var count = maze.getMaze()[x + 1][y] + maze.getMaze()[x - 1][y] + maze.getMaze()[x][y + 1] + maze.getMaze()[x][y - 1];
-                return count;
+                var north = maze.getMaze()[x][y + 1];
+                var south = maze.getMaze()[x][y - 1];
+                var east = maze.getMaze()[x + 1][y];
+                var west = maze.getMaze()[x - 1][y];
+                if (north < 2 && south < 2 && east < 2 && west < 2) {
+                    return north + south + east + west;
+                }
+                return 4;
             }
 
+            //Get what connections this wall has with other walls
             function getNeighborType(x, y) {
                 switch (getNeighborCount(x, y)) {
                     case 1:
@@ -391,8 +360,13 @@
                         var extraTranslation = { x: 0, y: 0 };
                         switch (maze.getMaze()[x][y]) {
                             case maze.WALL:
-                                if (Math.random() < 0.1 && x > 0 && x != maze.getWidth() - 1 && y > 0 && y != maze.getHeight() - 1) {
+                                //Chance for a wall tile to get a special feature
+                                var featureChance = 0.2;
+
+                                //Select a special feature to replace tile with, depending on neighboring walls
+                                if (Math.random() < featureChance && x > 0 && x != maze.getWidth() - 1 && y > 0 && y != maze.getHeight() - 1) {
                                     switch (getNeighborType(x, y)) {
+                                        //Fence walls
                                         case HORIZONTAL:
                                             scale.makeScale(1, 1, 0.1);
                                             cube = new THREE.Mesh(planeGeometry, fenceMaterial);
@@ -403,6 +377,7 @@
                                             cube = new THREE.Mesh(planeGeometry, fenceMaterial);
                                             cube.material.side = THREE.DoubleSide;
                                             break;
+                                        //Statues
                                         case END:
                                             if (endDecor.length > 0) {
                                                 cube = endDecor[Math.floor(Math.random() * endDecor.length)].clone();
@@ -472,6 +447,7 @@
                                 cube.name = 'yellowKey';
                                 break;
                         }
+                        //Once correct maze object has been created, move it to correct position
                         cube.applyMatrix(scale);
                         cube.applyMatrix(rotation);
                         translation.makeTranslation(((x - maze.getWidth() / 2) * mazeScale) + extraTranslation.x, 0, ((-y + maze.getHeight() / 2) * mazeScale) + extraTranslation.y);
@@ -483,6 +459,7 @@
                         mazeObjects.push(cube);
                     }
                     else {
+                        //If tile is empty, place a floor decoration
                         if (mazeDecor.length > 0) {
                             var decor = mazeDecor[Math.floor(Math.random() * mazeDecor.length)].clone();
                             var scale = new THREE.Matrix4();
@@ -497,7 +474,7 @@
                             decor.castShadow = true;
                             scene.add(decor);
                             mazeObjects.push(decor);
-                        }                        
+                        }
                     }
                 }
             }
@@ -745,6 +722,9 @@
             }
         }
 
+        var pathObjects = [];
+        var pathShown = false;
+
         //Key down event listener
         var onKeyDown = function (event) {
             switch (event.keyCode) {
@@ -771,6 +751,40 @@
                 case 32:
                     firstPerson = !firstPerson;
                     controls.enabled = !controls.enabled;
+                    break;
+
+                case 80:
+                    if (!pathShown) {
+                        //Create and show a path from the player's current position
+                        var x = Math.ceil(((Pos.x - 0.5 * mazeScale) / mazeScale) + (maze.getWidth() / 2));
+                        var y = Math.ceil((maze.getHeight() / 2) - ((Pos.z + 0.5 * mazeScale) / mazeScale));
+
+                        if (x >= 0 && y >= 0 && x < maze.getWidth() && y < maze.getHeight()) {
+                            var path = maze.findPath(x, y);
+                            for (var i = 0; i < path.length; i++) {
+                                var cube = new THREE.Mesh(cubeGeometry, pinkMaterial);
+                                var scale = new THREE.Matrix4();
+                                scale.makeScale(0.2, 0.2, 0.2);
+                                cube.applyMatrix(scale);
+                                var transform = new THREE.Matrix4();
+                                transform.makeTranslation((path[i].x - maze.getWidth() / 2) * mazeScale, -(mazeScale / 2), (-path[i].y + maze.getHeight() / 2) * mazeScale);
+                                cube.applyMatrix(transform);
+                                scene.add(cube);
+                                pathObjects.push(cube);
+                                pathShown = true;
+                            }
+                        }
+                    }
+                    else {
+                        //Remove the path from the scene
+                        while (pathObjects.length > 0) {
+                            scene.remove(pathObjects[0]);
+                            pathObjects.shift();
+                        }
+                        pathObjects = [];
+                        pathShown = false;
+                    }
+                    
                     break;
             }
         };
